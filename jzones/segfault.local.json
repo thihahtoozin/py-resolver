@@ -1,0 +1,24 @@
+{
+  "$TTL": "86400",
+  "$ORIGIN": "segfault.local.",
+  "@_SOA": [
+    "SOA",
+    "ns1.segfault.local. hostmaster.segfault.local.  2024111401 3600 1800 1209600 86400"
+  ],
+  "@_NS": [
+    "NS",
+    "ns1.segfault.local."
+  ],
+  "ns1": [
+    "A",
+    "192.168.100.254"
+  ],
+  "ssh": [
+    "A",
+    "192.168.100.254"
+  ],
+  "www": [
+    "A",
+    "192.168.100.254"
+  ]
+}
