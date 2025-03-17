@@ -3,7 +3,7 @@ import glob
 import json
 from pprint import pprint
 
-def read_zone_file(zone_file: str) -> dict:
+def read_zone_file(zone_file: str) -> dict: # takes zone file as input
     
     records: dict = {}
     clean_lines: list = []

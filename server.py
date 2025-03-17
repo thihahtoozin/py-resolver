@@ -10,11 +10,14 @@ from zoneparser import *
 jzone_files = glob.glob('jzones/*.json')
 zone_file = glob.glob('zones/*.zone')
 
-ip: str = '127.0.0.1'
+ip: str = '192.168.144.69'
+#ip: str = '127.0.0.1'
 port: int = 53
 
 #records: dict = read_zone_file(zone_file[0])
+recs_dict = read_zone_file(zone_file[0])
 #ttl, origin, soa, recs = load_zone_file(records)
+load_zone_file(recs_dict)
 
 # HEADER (to Response)
 # Transaction ID (2 bytes) # we just need to return the data to back to the client
@@ -83,7 +86,10 @@ def getzone(domain_list: list) -> dict: # Getting the specified zone dictionary 
     else: 
         zone_name: str = '.'.join(domain_list) + '.'
     #print(zone_name)
-    return zone_profiles[zone_name]
+    if zone_name in zone_profiles:
+        return zone_profiles[zone_name]
+    else:
+        return {}
 
 def get_records(data):
     dm_lst, q_type = get_question_domain(data) #list, bytes
