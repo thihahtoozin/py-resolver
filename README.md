@@ -2,9 +2,12 @@
 
 **PyResolver** is the minimalist DNS implementation for the local network written in python. A simple, lightweight DNS server written in Python that can simply resolve domain names and support custom mappings. This project is designed for educational purposes, local network DNS resolution, or as a customizable alternative to public DNS resolvers.
 
-## Introduction  
+## Description
 
-This project is a python-based DNS server running on udp protocol that can resolve domain names and return appropriate IP addresses based on predefined records. It is useful for:  
+This project is a python-based DNS resolver running on the udp protocol that can resolve domain names and return appropriate IP addresses based on predefined records.
+By default, it listens on udp port 53 on the specified ip address and responds to DNS queries with the answers defined on zone files.
+
+It is useful for:  
 - Setting up a local DNS server for development or testing  
 - Overriding domain resolutions for specific domains  
 - Learning how DNS servers work  
@@ -102,3 +105,8 @@ By default `log_level` is set to "info".
 - to have a startup script for the systemd service
 - to have its own `manual` page
 - to support other record types
+
+
+### Referennces
+- [RFC 1035 Specification](https://www.ietf.org/rfc/rfc1035.txt)
+- [howCode - Make Your Ownn DNS Server](https://www.youtube.com/watch?v=HdrPWGZ3NRo&list=PLBOh8f9FoHHhvO5e5HF_6mYvtZegobYX2)
