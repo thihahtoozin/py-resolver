@@ -65,9 +65,23 @@ You can test the server using `dig`:
 dig segfault.local @127.0.0.1
 ```
 
+### Logging
+
+By default, you can view queries in the `logs/queries.log` file.
+```
+cd py-resolver
+tail -f logs/queries.log
+```
+
+You can modify the destination of the log file by changing the variable `log_file` in the `server.py` file.
+
+```
+log_file = "/path/to/log/file"
+```
+
+
 ### Future Improvements
 - to add command line arguments
-- to add logging mechanism
 - to have a startup script for the systemd service
 - to have our own `help` and `man` page
 - to support other record types

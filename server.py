@@ -1,53 +1,26 @@
 import socket
 import re
 import glob
+import querylogger
 from zoneparser import *
-#from pprint import pprint
 
 #zone_file: str = 'zones/segfault.local.zone'
 #jzone_file: str = 'jzones/segfault.local.json'
 
 jzone_files = glob.glob('jzones/*.json')
 zone_file = glob.glob('zones/*.zone')
+log_file = "logs/queries.log"
 
-ip: str = '192.168.144.69'
-#ip: str = '127.0.0.1'
+#ip: str = '192.168.144.69'
+ip: str = '127.0.0.1'
 port: int = 53
+
+qlogger = querylogger.Logger(log_file, "info")
 
 #records: dict = read_zone_file(zone_file[0])
 recs_dict = read_zone_file(zone_file[0])
-#ttl, origin, soa, recs = load_zone_file(records)
+#ttl, origin, soa, recs = load_zone_file(record)
 load_zone_file(recs_dict)
-
-# HEADER (to Response)
-# Transaction ID (2 bytes) # we just need to return the data to back to the client
-# Flags (2 bytes)
-##     QR (1 bit) # 0 for req 1 for rep (as a server, 1 is chosen)
-## Opcode (4 bit) # 0 (0000) for standard query
-##     AA (1 bit) # 0 for "Server is not an authority"
-##     TC (1 bit) # 0 for "Message is not truncated"
-##     RD (1 bit) # 1 for "Do query recursively"
-##     RA (1 bit) # 1 for "Server can do recursive queries"
-##      Z (3 bit) # 0 "Reserved"
-##  RCODE (4 bit) # 0 (0000) for "No error"
-# QDCOUNT (2 bytes) # 1 (00 01) 
-# ANCOUNT (2 bytes) # 2 (00 02) # depends (don't want to hard code)
-# ???
-# NSCOUNT (2 bytes) # 0 (00 00) "for now there won't be any name server resource records in the authority records section"
-# ARCOUNT (2 bytes) # 1 (00 01)
-
-# Queries # just return back to the client
-# Answers
-# Additional Records
-
-'''
-NSCOUNT         an unsigned 16 bit integer specifying the number of name
-                server resource records in the authority records
-                section.
-
-ARCOUNT         an unsigned 16 bit integer specifying the number of
-                resource records in the additional records section.
-'''
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind((ip,port))
@@ -61,20 +34,15 @@ def get_question_domain(data: bytes) -> tuple:
         domain_lst.append(data[i:i+length].decode()) # decode the segment
         i += length
     question_type = data[i+1: i+3]
-    #print(domain_lst)
-    #print(question_type)
     return(domain_lst, question_type)
 
 def generate_zone_profiles() -> dict:
-
     zone_profiles: dict = {}
-
     for jzone in jzone_files:
         with open(jzone, 'r') as zonedata:
             data = json.load(zonedata)
             zone_name = data['$ORIGIN']
             zone_profiles[zone_name] = data
-
     #pprint(zone_profiles)
     return zone_profiles
 
@@ -179,6 +147,9 @@ def generate_answer(filtered_recs: dict, rec_t: str, sub_dm: str, r_value: list)
 
     return ans_b
 
+def get_query_info(data):
+    pass
+
 def build_rep(data: bytes) -> bytes:
     
     # HEADER
@@ -214,7 +185,14 @@ def main() -> None:
     while 1:
         data, addr = s.recvfrom(512) # receive 512 bytes of dns request
         #print(type(data)) <class 'bytes'>
-        print(f"[+] Get query from {addr}")
+        src_addr, src_port = addr
+        query_string, query_type = get_question_domain(data[12:])
+        query_string = '.'.join(query_string)
+        if query_type == b'\x00\x01':
+            query_type = 'A' 
+        
+        msg = f"{src_addr}:{src_port} queries {query_string} of type {query_type}"
+        qlogger.add_log_info(msg)
         
         rep: bytes = build_rep(data)
         #print(recs)
