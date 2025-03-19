@@ -52,13 +52,26 @@ www IN  A       192.168.100.254      ; Example entry for a website host
 ```
 
 ## Usage
-### Running DNS Server
-```sh
-sudo python3 server.py
-```
-By default, the server listens on `127.0.0.1:53`. You may need root privileges to bind to port 53.
+### Help Menu
 
-### Querying the Server
+```
+python3 main.py -h
+```
+
+### Basic Usage
+You may need root privileges to bind to port 53.
+```
+sudo python3 main.py 127.0.0.1
+```
+Replace `127.0.0.1` with the ip address of the interface being used if you are not listening on the loopback interface.
+
+By default, the server listens on the udp port 53 (i.e. `127.0.0.1:53`). But you can specify this to the desired port address using `-p` or `--port`
+
+```
+sudo python3 main.py 127.0.0.1 -p 1338
+```
+
+### Querying the Server Using `dig`
 You can test the server using `dig`:
 
 ```sh
@@ -67,21 +80,25 @@ dig segfault.local @127.0.0.1
 
 ### Logging
 
-By default, you can view queries in the `logs/queries.log` file.
+By default, logs are added to the `logs/queries.log` file.
 ```
 cd py-resolver
 tail -f logs/queries.log
 ```
 
-You can modify the destination of the log file by changing the variable `log_file` in the `server.py` file.
+However, you can specify the destination log file by setting `--log_file` optional argumennt. 
 
 ```
-log_file = "/path/to/log/file"
+sudo python3 main.py --log_file /path/to/file.log 127.0.0.1
 ```
 
+You can also specify the log level using `--log_level`. This can be one of debug, info, warning, error or critical.
+```
+sudo python3 main.py --log_file /path/to/file.log --log_level debug 127.0.0.1
+```
+By default `log_level` is set to "info".
 
 ### Future Improvements
-- to add command line arguments
 - to have a startup script for the systemd service
-- to have our own `help` and `man` page
+- to have its own `manual` page
 - to support other record types

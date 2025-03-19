@@ -1,21 +1,39 @@
 import socket
 import re
 import glob
+import argparse
 import querylogger
 from zoneparser import *
+
+parser = argparse.ArgumentParser(description="Simple DNS Resolver")
+parser.add_argument("addr", help="specify the layer 3 address on listen on")
+parser.add_argument("-p", "--port", type=int, help="specify the layer 4 udp port address (default = 53)")
+parser.add_argument("--log_level", choices=['debug', 'info', 'warning', 'error', 'critical'], help="Set log level (default = 'info')")
+parser.add_argument("--log_file", help="specify the destination log file to be stored (default = 'logs/queries.log')")
+
+args = parser.parse_args()
 
 #zone_file: str = 'zones/segfault.local.zone'
 #jzone_file: str = 'jzones/segfault.local.json'
 
 jzone_files = glob.glob('jzones/*.json')
 zone_file = glob.glob('zones/*.zone')
-log_file = "logs/queries.log"
 
-#ip: str = '192.168.144.69'
-ip: str = '127.0.0.1'
+if not args.log_file:
+    log_file = "logs/queries.log"
+else:
+    log_file = args.log_file
+
+ip: str = args.addr
 port: int = 53
+if args.port:
+    port: int = args.port
 
-qlogger = querylogger.Logger(log_file, "info")
+if args.log_level:
+    qlogger = querylogger.Logger(log_file, args.log_level)
+else:
+    qlogger = querylogger.Logger(log_file, "info")
+
 
 #records: dict = read_zone_file(zone_file[0])
 recs_dict = read_zone_file(zone_file[0])
@@ -24,6 +42,7 @@ load_zone_file(recs_dict)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind((ip,port))
+print(f"[+] Listening on {ip}:{port} ")
 
 def get_question_domain(data: bytes) -> tuple:
     domain_lst = []
