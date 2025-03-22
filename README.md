@@ -6,8 +6,17 @@
 
 This project is a python-based DNS resolver running on the udp protocol that can resolve domain names and return appropriate IP addresses based on predefined records.
 By default, it listens on udp port 53 on the specified ip address and responds to DNS queries with the answers defined on zone files.
+```
++-----------+-----(queries)-->+-----------+                     +------------------+
+| DNS Client|                 | PyResolver| -----(forward)----> | External Resolver|
++-----------+<---(response)---+-----------+                     +------------------+
+     ^                              |                                    |
+     |                              |                                    v
+     |<------------(relay)----------|<-----------(response)--------------+
+```
+If the client queries the records that are not define in the local zone files, `py-resolver` forwards the client's request towards the external DNS resolver(a.k.a recursive resolver) `8.8.8.8` if `-r` flag is set. However, **PyResolver** cannot cache those external records.
 
-It is useful for:  
+**PyResolver** is useful for:  
 - Setting up a local DNS server for development or testing  
 - Overriding domain resolutions for specific domains  
 - Learning how DNS servers work  
@@ -15,6 +24,8 @@ It is useful for:
 ## Features  
 
 ✔️ Only supports **A** record
+
+✔️ Can forward **DNS queries** to external recursive resolvers such as `8.8.8.8`, `1.1.1.1`
 
 ✔️ **Custom domain mappings** using a configuration file  
 
@@ -80,6 +91,17 @@ You can test the server using `dig`:
 ```sh
 dig segfault.local @127.0.0.1
 ```
+
+### Enabling the DNS Forwarding
+You can make recursive dns queries by enabling `-r` flag
+```
+sudo python3 main.py -r 127.0.0.1
+```
+`py-resolver` does this by forwarding DNS queries from the client (such as `dig`) towards the external recursive DNS resolver so that the `py-resolver` can relay the response back the client. By default the extern DNS resolver is `8.8.8.8`. You can set the external recursive resolver with the `-e` flag.
+```
+sudo python3 main.py -r -e 1.1.1.1:53 127.0.0.1
+```
+without `-r` flag setting `-e` flag will mean nothing since that required part of the code has never run.
 
 ### Logging
 

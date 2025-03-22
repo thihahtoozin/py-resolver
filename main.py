@@ -10,6 +10,8 @@ parser.add_argument("addr", help="specify the layer 3 address on listen on")
 parser.add_argument("-p", "--port", type=int, help="specify the layer 4 udp port address (default = 53)")
 parser.add_argument("--log_level", choices=['debug', 'info', 'warning', 'error', 'critical'], help="Set log level (default = 'info')")
 parser.add_argument("--log_file", help="specify the destination log file to be stored (default = 'logs/queries.log')")
+parser.add_argument("-r", "--recursive", action="store_true", help="enable recursive resolution by forwarding dns query to external dns resolver")
+parser.add_argument("-e", "--external_resolver", help="<addr>:<port> setting the address of external dns resolver (default = 8.8.8.8:53)")
 
 args = parser.parse_args()
 
@@ -78,8 +80,22 @@ def getzone(domain_list: list) -> dict: # Getting the specified zone dictionary 
     else:
         return {}
 
-def get_records(data): # data after the header is taken as the input (data = data[12:])
-    dm_lst, q_type = get_question_domain(data) #list, bytes
+def forward_to_external_dns(data: bytes, external_dns: str = '8.8.8.8', external_port: int = 53) -> bytes:
+    """
+    Forward unknown DNS queries to external server to get response and return
+    """
+    with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as s:
+        s.settimeout(2) # set timeout for the request
+        s.sendto(data, (external_dns, external_port)) # send the query to external DNS resolver
+        try:
+            response, _ = s.recvfrom(512) # receive the response from the exteral DNS resolver
+            return response
+        except socket.timeout:
+            print("Request to external DNS server timeout.")
+            return b''
+
+def get_records(data): # takes in the whole request data
+    dm_lst, q_type = get_question_domain(data[12:]) #list, bytes
     qt = ''
     if q_type == b"\x00\x01":
         qt = 'A'
@@ -88,13 +104,14 @@ def get_records(data): # data after the header is taken as the input (data = dat
     #print('ZONE---------')
     #pprint(zone)
 
+    if not zone and args.recursive:
+        return (0,0,0)
+
     filtered_recs: dict = {} # zones with requested type(i.e. A)
     for k,v in zone.items():
         if 'A' in v:
             filtered_recs[k] = v
-
     # filtered_recs => {'ns1': ['A', '192.168.100.254'], 'ssh': ['A', '192.168.100.254'], 'www': ['A', '192.168.100.254']}
-
     return (filtered_recs, qt, dm_lst)
 
 def get_flags(data: bytes) -> bytes:
@@ -172,7 +189,9 @@ def build_rep(data: bytes) -> bytes:
     trans_id: bytes = data[:2]           # TransactionID
     flags: bytes = get_flags(data[2:4])  # Flags
     qd_count: bytes = b'\x00\x01'        # Question Count 
-    an_count: bytes = len(get_records(data[12:])[0]).to_bytes(2, byteorder='big') # Answer Count
+
+    an_count: bytes = len(get_records(data)[0]).to_bytes(2, byteorder='big') # Answer Count
+
     ns_count: bytes = (0).to_bytes(2, byteorder='big') # Nameserver Count 
     ar_count: bytes = (0).to_bytes(2, byteorder='big') # Additional Count
 
@@ -180,7 +199,7 @@ def build_rep(data: bytes) -> bytes:
 
     dns_body: bytes = b''
     
-    grepped_records, rectype, dm_name_l = get_records(data[12:])
+    grepped_records, rectype, dm_name_l = get_records(data)
     #dm_name = '.'.join(dm_name_l) # segfault.local
 
     dns_question: bytes = extract_question(data)
@@ -210,7 +229,14 @@ def main() -> None:
         msg = f"{src_addr}:{src_port} queries {query_string} of type {query_type}"
         qlogger.add_log_info(msg)
         
-        rep: bytes = build_rep(data)
+        if get_records(data) != (0,0,0):
+            rep: bytes = build_rep(data)
+        else:
+            if not args.external_resolver:
+                rep: bytes = forward_to_external_dns(data)
+            else:
+                ext_addr, ext_port = args.external_resolver.split(':')
+                rep: bytes = forward_to_external_dns(data, ext_addr, int(ext_port))
         #print(recs)
         s.sendto(rep, addr)
 
