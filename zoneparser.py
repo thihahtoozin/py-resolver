@@ -3,10 +3,10 @@ import glob
 import json
 from pprint import pprint
 
-def read_zone_file(zone_file: str) -> dict: # takes zone file as input
+def read_zone_file(zone_file: str) -> dict: # takes a zone file as input
     
     records: dict = {}
-    clean_lines: list = []
+    clean_lines: list = [] # list of each line without comments and white spaces 
     with open(zone_file, 'r') as f:
         lines = f.readlines()
         for line in lines:
@@ -14,20 +14,20 @@ def read_zone_file(zone_file: str) -> dict: # takes zone file as input
             if line: # Ignore empty lines
                 clean_lines.append(line)
         # Reconstruct SOA Records
-        parsed_records = []
-        soa_record = []
+        parsed_records = [] # list of lists(parts)
+        soa_record = [] # ['@', 'IN', 'SOA']
         inside_soa = False
 
         for line in clean_lines:
             parts: list = line.split()
+            # Remove '(' chars in each word
             for i in range(len(parts)):
                 parts[i]: str = parts[i].replace('(', '')
 
             if 'SOA' in parts:
                 inside_soa: bool = True
-                soa_record: list = parts[:3] # ['@', 'NS', 'SOA']
-                soa_data: list = parts[3:]   # The rest of the SOA record
-
+                soa_record: list = parts[:3] # ['@', 'IN', 'SOA']
+                soa_data: list = parts[3:]   # [recordns1.segfault.local.,hostmaster.segfault.local.]
             elif inside_soa:
                 soa_data.extend(parts)
                 if ')' in parts: # End of SOA block
@@ -38,12 +38,13 @@ def read_zone_file(zone_file: str) -> dict: # takes zone file as input
                 parsed_records.append(parts)
 
         #print(parsed_records)
+        #[['$TTL', '86400'], ['$ORIGIN', 'segfault.local.'], ['@', 'IN', 'SOA', 'ns1.segfault.local. hostmaster.segfault.local.  2024111401 3600 1800 1209600 86400'], ['@', 'IN', 'NS', 'ns1.segfault.local.'], ['ns1', 'IN', 'A', '172.20.10.14'], ['ssh', 'IN', 'A', '172.20.10.14'], ['www', 'IN', 'A', '172.20.10.14']]
         for rcs in parsed_records:
             name: str = rcs[0]
             if '@' in rcs:
-                name: str = name + '_' + rcs[2]
+                name: str = name + '_' + rcs[2] # @_SOA
 
-            if len(rcs) > 2: # we have a problem here (the previous '@''s values are overwritten)
+            if len(rcs) > 2:
                 records[name] = rcs[2:]
             else:
                 records[name] = rcs[1]

@@ -17,7 +17,7 @@ args = parser.parse_args()
 #jzone_file: str = 'jzones/segfault.local.json'
 
 jzone_files = glob.glob('jzones/*.json')
-zone_file = glob.glob('zones/*.zone')
+zone_files = glob.glob('zones/*.zone')
 
 if not args.log_file:
     log_file = "logs/queries.log"
@@ -34,11 +34,11 @@ if args.log_level:
 else:
     qlogger = querylogger.Logger(log_file, "info")
 
-
-#records: dict = read_zone_file(zone_file[0])
-recs_dict = read_zone_file(zone_file[0])
-#ttl, origin, soa, recs = load_zone_file(record)
-load_zone_file(recs_dict)
+for zone_file in zone_files:
+    #recs_dict = read_zone_file(zone_files[0]) # we need to fix this 
+    recs_dict = read_zone_file(zone_file)
+    #ttl, origin, soa, recs = load_zone_file(record)
+    load_zone_file(recs_dict)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind((ip,port))
@@ -52,7 +52,7 @@ def get_question_domain(data: bytes) -> tuple:
         i += 1 # move to actual segment
         domain_lst.append(data[i:i+length].decode()) # decode the segment
         i += length
-    question_type = data[i+1: i+3]
+    question_type = data[i+1: i+3] # skip null byte at index i 
     return(domain_lst, question_type)
 
 def generate_zone_profiles() -> dict:
@@ -78,13 +78,13 @@ def getzone(domain_list: list) -> dict: # Getting the specified zone dictionary 
     else:
         return {}
 
-def get_records(data):
+def get_records(data): # data after the header is taken as the input (data = data[12:])
     dm_lst, q_type = get_question_domain(data) #list, bytes
     qt = ''
     if q_type == b"\x00\x01":
         qt = 'A'
 
-    zone: dict = getzone(dm_lst)
+    zone: dict = getzone(dm_lst) # get zone data from the zone profiles
     #print('ZONE---------')
     #pprint(zone)
 
@@ -165,9 +165,6 @@ def generate_answer(filtered_recs: dict, rec_t: str, sub_dm: str, r_value: list)
     ans_b: bytes = dm_name_b + rec_type_b + rec_class_b + soa_ttl_b + ans_len_b + ans_data_b
 
     return ans_b
-
-def get_query_info(data):
-    pass
 
 def build_rep(data: bytes) -> bytes:
     
