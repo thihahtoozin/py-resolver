@@ -70,11 +70,10 @@ def generate_zone_profiles() -> dict:
 zone_profiles = generate_zone_profiles()
 
 def getzone(domain_list: list) -> dict: # Getting the specified zone dictionary from the zone profiles 
-    if domain_list[0] in ['www', 'ssh']:
+    if len(domain_list) >= 3: #domain_list[0] in ['www', 'ssh']:
         zone_name: str = '.'.join(domain_list[1:]) + '.'
     else: 
         zone_name: str = '.'.join(domain_list) + '.'
-    #print(zone_name)
     if zone_name in zone_profiles:
         return zone_profiles[zone_name]
     else:
@@ -99,20 +98,26 @@ def get_records(data): # takes in the whole request data
     qt = ''
     if q_type == b"\x00\x01":
         qt = 'A'
+    if q_type == b"\x00\x05":
+        qt = 'CNAME'
 
-    zone: dict = getzone(dm_lst) # get zone data from the zone profiles
+    zone: dict = getzone(dm_lst) # get zone data from the zone profiles 
     #print('ZONE---------')
     #pprint(zone)
+    origin = zone['$ORIGIN'].strip() # segfault.local
 
     if not zone and args.recursive:
-        return (0,0,0)
+        return (0,0,0,0)
 
     filtered_recs: dict = {} # zones with requested type(i.e. A)
     for k,v in zone.items():
-        if 'A' in v:
+        if qt in v: # qt may be A or CNAME
             filtered_recs[k] = v
     # filtered_recs => {'ns1': ['A', '192.168.100.254'], 'ssh': ['A', '192.168.100.254'], 'www': ['A', '192.168.100.254']}
-    return (filtered_recs, qt, dm_lst)
+    # or
+    # filtered_recs => {'alias': ['CNAME', 'www']}
+    # print(filtered_recs)
+    return (filtered_recs, qt, dm_lst, origin)
 
 def get_flags(data: bytes) -> bytes:
     flags_byte1:bytes = bytes(data[0])
@@ -123,8 +128,8 @@ def get_flags(data: bytes) -> bytes:
     opcode: str = f"{(flags_byte1[0] >> 3) & 0b1111:04b}" # extracting opcode # 0
     aa: str = '1'       # Authoritative Answer
     tc: str = '0'       # TrunCation
-    rd: str = '0'       # Recursion Desired (not going to support recursion)
-    ra: str = '0'       # Recursion Available 
+    rd: str = '0'       # Recursion Desired (not going to support recursion) # we need to set this to 1 depending on if -r flag is on
+    ra: str = '0'       # Recursion Available # we need to set this to 1 depending on if -r flag is on
     z: str = '000'      # Reserved
     rcode: str = '0000' # Response Code (no error)
 
@@ -153,37 +158,61 @@ def extract_question(data: bytes) -> bytes:  # extract dns question from the cli
 
     return q
 
-def generate_answer(filtered_recs: dict, rec_t: str, sub_dm: str, r_value: list) -> bytes:
+def generate_answer(filtered_recs: dict, rec_t: str, origin: str, sub_dm: str, r_value: list) -> bytes:
     dm_name_b: bytes = b'\xc0\x0c' # 0c means 12 in hexa-decimal meaning the name can be found from the 12-bytes offset from the start of the dns packet(domain name using message compression)
-
-    # Type
-    if rec_t == 'A':
-        rec_type_b: bytes = b'\x00\x01'
-    elif rec_t == 'CN': # for Canonical Name (reversed dns query)
-        rec_type_b: bytes = b'\x00\x05'
 
     # Class
     rec_class_b: bytes = b'\x00\x01' # for IN
 
     soa_ttl_b: bytes = int('3600').to_bytes(4, byteorder='big') # we have to hard code it for now (we need to fix the code to extract from the zone file)
-    ans_len_b: bytes = b'\x00\x04' # length of the ip address 
-    grepped_ip_l: list = []
 
-    grepped_ip_l =  r_value[1].split('.') #find in filtered_recs # ['192', '168', '100', '1']
+    if rec_t == 'A':
+        rec_type_b: bytes = b'\x00\x01'
+        ans_len_b: bytes = b'\x00\x04' # length of the ip address 
+        grepped_ip_l: list = []
 
-    ans_data_l = []
-    for grepped_ip_part in grepped_ip_l: 
-        ans_data_l.append(int(grepped_ip_part)) # [192, 168, 100, 1] 
+        grepped_ip_l =  r_value[1].split('.') #find in filtered_recs # ['192', '168', '100', '1']
 
-    ans_data_b: bytes = b''
-    for ans_data in ans_data_l:
-        ans_data_b += ans_data.to_bytes(1, byteorder='big')
+        ans_data_l = []
+        for grepped_ip_part in grepped_ip_l: 
+            ans_data_l.append(int(grepped_ip_part)) # [192, 168, 100, 1] 
 
-    ans_b: bytes = dm_name_b + rec_type_b + rec_class_b + soa_ttl_b + ans_len_b + ans_data_b
+        ans_data_b: bytes = b''
+        for ans_data in ans_data_l:
+            ans_data_b += ans_data.to_bytes(1, byteorder='big')
 
-    return ans_b
+        ans_b: bytes = dm_name_b + rec_type_b + rec_class_b + soa_ttl_b + ans_len_b + ans_data_b
 
-def build_rep(data: bytes) -> bytes:
+        return ans_b
+
+    elif rec_t == 'CNAME': # filter_recs => {'alias': ['CNAME', 'www']}
+        rec_type_b: bytes = b'\x00\x05'
+        cname_labels: list = r_value[1:]
+        if len(cname_labels) < 2:
+            cname_labels.extend(origin.split('.')[:-1])
+        else:
+            pass
+        #print(f"cname_labels {cname_labels}")
+        ans_s: str = '.'.join(cname_labels)
+
+        #print(f"ans_s {ans_s}")
+        ans_len: int = len(ans_s)
+
+        cname_encoded = b''
+        for label in cname_labels:
+            cname_encoded += len(label).to_bytes(1, byteorder='big') + label.encode()
+        cname_encoded += b'\x00'
+
+        #ans_len_b: bytes = ans_len.to_bytes(2, byteorder='big')
+        ans_len_b: bytes = len(cname_encoded).to_bytes(2, byteorder='big')
+
+        ans_b: bytes = dm_name_b + rec_type_b + rec_class_b + soa_ttl_b + ans_len_b + cname_encoded
+
+        return ans_b
+    else:
+        return b"The Query Type Not Supported"
+
+def build_rep(data: bytes, q_type: str) -> bytes:
     
     # HEADER
     trans_id: bytes = data[:2]           # TransactionID
@@ -197,9 +226,7 @@ def build_rep(data: bytes) -> bytes:
 
     dns_header: bytes = trans_id+flags+qd_count+an_count+ns_count+ar_count
 
-    dns_body: bytes = b''
-    
-    grepped_records, rectype, dm_name_l = get_records(data)
+    grepped_records, rectype, dm_name_l, origin = get_records(data)
     #dm_name = '.'.join(dm_name_l) # segfault.local
 
     dns_question: bytes = extract_question(data)
@@ -207,8 +234,8 @@ def build_rep(data: bytes) -> bytes:
     #client_query_l, client_query_type = get_question_domain(data[12:]) 
 
     dns_answer: bytes = b''
-    for sub_d, r_value in grepped_records.items():
-        answers: bytes = generate_answer(grepped_records, rectype, sub_d, r_value)
+    for sub_d, r_value in grepped_records.items(): # filtered_recs => {'alias': ['CNAME', 'www']}
+        answers: bytes = generate_answer(grepped_records, rectype, origin, sub_d, r_value)
         dns_answer += answers
 
     # RESPONSE
@@ -223,14 +250,17 @@ def main() -> None:
         src_addr, src_port = addr
         query_string, query_type = get_question_domain(data[12:])
         query_string = '.'.join(query_string)
+
         if query_type == b'\x00\x01':
             query_type = 'A' 
+        elif query_type == b'\x00\x05':
+            query_type = 'CNAME'
         
         msg = f"{src_addr}:{src_port} queries {query_string} of type {query_type}"
         qlogger.add_log_info(msg)
         
-        if get_records(data) != (0,0,0):
-            rep: bytes = build_rep(data)
+        if get_records(data) != (0,0,0,0):
+            rep: bytes = build_rep(data, query_type)
         else:
             if not args.external_resolver:
                 rep: bytes = forward_to_external_dns(data)
