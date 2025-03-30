@@ -27,9 +27,9 @@ If the client queries the records that are not defined in the local zone files, 
 
 ✔️ Can forward **DNS queries** to external recursive resolvers such as `8.8.8.8`, `1.1.1.1`
 
-✔️ **Custom domain mappings** using a configuration file  
+✔️ **Custom domain mappings** using zone files
 
-✔️ Can run on **any port**, not just 53 (useful for testing)  
+✔️ Can run on **any port**, not just on 53 (useful for testing)  
 
 ✔️ **Minimal dependencies** (uses Python’s built-in socket module)  
 
