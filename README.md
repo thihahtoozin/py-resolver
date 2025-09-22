@@ -106,7 +106,7 @@ sudo python3 main.py -r -e 1.1.1.1:53 127.0.0.1
 
 ### Logging
 
-By default, logs are stored the `logs/queries.log` file.
+By default, logs are stored in the `logs/queries.log` file.
 ```
 cd py-resolver
 tail -f logs/queries.log
